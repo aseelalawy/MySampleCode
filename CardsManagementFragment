@@ -1,0 +1,342 @@
+class CardsManagementFragment : BaseFragment<FragmentCardsManagementBinding>(), CardsCallback {
+    private val viewModel by viewModels<RechargeBalanceVM>()
+    private val viewModelCards by viewModels<CardsManagmentVM>()
+    private val viewModelRecurring by viewModels<RecurringVM>()
+    private val args by lazy { CardsManagementFragmentArgs.fromBundle(requireArguments()) }
+    private val viewModelPayment by viewModels<PaymentTypesVM>()
+    private var onChoice: ((dataCards: CardsType?) -> Unit)? = null
+
+    private val clickCallback: CardsTypeClick = CardsTypeClick { item ->
+        viewModelCards.setSelectedCard(item.id)
+
+    }
+
+    private val adapter by lazy {
+        CardsManagementAdapter(
+            this,
+            callback = clickCallback,
+            if (args.paymentType == PaymentCards.Recurring) true else false
+        )
+    }
+
+
+    override fun setupBinding(ir: LayoutInflater) = FragmentCardsManagementBinding.inflate(ir)
+
+
+    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+        super.onViewCreated(view, savedInstanceState)
+
+        observeData()
+
+    }
+
+    override fun initViews() {
+        if (args.cardsType.isNullOrEmpty()) {
+            viewModel.getHisabiCards()
+            binding.payNow.setText(getText(R.string.transfer_continue))
+
+        } else {
+            args.cardsType?.let {
+                var invoicesList: ArrayList<CardsType> = arrayListOf()
+                for (listCard in it) invoicesList.add(listCard)
+
+                invoicesList.add(
+                    CardsType(
+                        type = CardsTypes.Other,
+                        id = "1",
+                        cardNumber = getString(R.string.use_anew_card),
+
+
+                        )
+                )
+                for (cardsType in it) {
+                    when (cardsType.cardType) {
+                        CardsTypes.Visa.key -> {
+                            cardsType.type = CardsTypes.Visa
+                        }
+
+                        CardsTypes.Mastercard.key -> {
+
+                            adapter.selectedType = CardsTypes.Mastercard.name
+                            cardsType.type = CardsTypes.Mastercard
+
+                        }
+
+                        CardsTypes.Other.key -> {
+                            cardsType.type = CardsTypes.Other
+
+                        }
+                    }
+                }
+                Log.d("selectedType", "" + invoicesList)
+                adapter.submitList(invoicesList)
+            }
+
+        }
+
+        binding.payNow.setOnClickListener {
+            adapter.selectedCardType?.let {
+                if (it == CardsTypes.Visa || it == CardsTypes.Mastercard) {
+                    when (args.paymentType) {
+                        PaymentCards.Recharge -> {
+                            viewModel.getReflectPayment(
+                                CyberSourceCreateRechargePaymentParams(
+                                    DestNum = args.destNum.toString(),
+                                    amount = args.amount.toString(),
+                                    adapter.selectedType.toString()
+                                )
+                            )
+                        }
+                        PaymentCards.Invoice -> {
+                            if (args.invoices != null) {
+                                var invoicesList: ArrayList<Map<String, String>> = arrayListOf()
+                                for (item in args.invoices!!) {
+                                    var map = HashMap<String, String>()
+                                    map["invoiceNumber"] = item
+                                    invoicesList.add(map)
+                                }
+
+                                viewModelPayment.createCardsPaymentCall(false,
+                                    CardsPaymentInvoicePaymentParams(
+                                        invoices = invoicesList,
+                                        cardId = adapter.selectedType.toString(),
+
+                                        )
+                                )
+
+
+                            }
+                        }
+                        PaymentCards.Recurring -> {
+                            adapter.selectedCard.let { card ->
+                                onChoice?.let { action ->
+                                    action(
+                                        card!!
+                                    )
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    when (args.paymentType) {
+                        PaymentCards.Recharge -> {
+                            viewModel.getReflectPayment(
+                                CyberSourceCreateRechargePaymentParams(
+                                    DestNum = args.destNum.toString(),
+                                    amount = args.amount.toString(),
+                                    adapter.selectedType.toString()
+                                )
+                            )
+
+                        }
+                        PaymentCards.Invoice -> {
+                            var invoicesList: ArrayList<Map<String, String>> = arrayListOf()
+                            for (item in args.invoices!!) {
+                                var map = HashMap<String, String>()
+                                map["invoiceNumber"] = item
+                                invoicesList.add(map)
+                            }
+                            viewModelPayment.createCardsPaymentCall(false,
+                                CardsPaymentInvoicePaymentParams(
+                                    invoices = invoicesList,
+                                    cardId = adapter.selectedType.toString(),
+
+                                    )
+                            )
+                        }
+                        PaymentCards.Recurring -> {
+                            viewModelRecurring.addCard()
+                        }
+                        PaymentCards.Other -> {
+                            viewModelRecurring.addCard()
+                        }
+                    }
+                }
+            }
+
+
+        }
+        binding.paymentTypes.adapter = adapter
+
+
+    }
+
+    private fun initAdapter(list: List<CardsType>?) {
+
+        list?.let {
+            var invoicesList: ArrayList<CardsType> = arrayListOf()
+            list.let {
+
+                for (listCards in it) {
+                    invoicesList.add(listCards)
+                    for (cardsType in it) {
+                        when (cardsType.cardType) {
+                            CardsTypes.Visa.key -> {
+                                cardsType.type = CardsTypes.Visa
+                            }
+
+                            CardsTypes.Mastercard.key -> {
+                                adapter.selectedType = CardsTypes.Mastercard.name
+                                cardsType.type = CardsTypes.Mastercard
+
+                            }
+
+                            CardsTypes.Other.key -> {
+                                cardsType.type = CardsTypes.Other
+
+                            }
+                        }
+                    }
+
+                    Log.d("selectedType", "" + invoicesList)
+                    adapter.submitList(invoicesList)
+
+                }
+                if (args.paymentType != PaymentCards.Other) invoicesList.add(
+                    CardsType(
+                        type = CardsTypes.Other,
+                        id = "1",
+                        cardNumber = getString(R.string.use_anew_card),
+
+
+                        )
+                )
+
+            }
+
+        }
+        if (list.isNullOrEmpty()) {
+            var invoicesList: ArrayList<CardsType> = arrayListOf()
+            invoicesList.add(
+                CardsType(
+                    type = CardsTypes.Other,
+                    id = "1",
+                    cardNumber = getString(R.string.use_anew_card),
+
+
+                    )
+            )
+            adapter.submitList(invoicesList)
+        }
+        args.cardId?.let { cardNo ->
+            Log.d("jnck",args.cardId.toString())
+            adapter.selectItemByCardNumber(cardNo)
+        }
+    }
+
+    private fun observeData() {
+        viewModel.cardsTypes.observe(viewLifecycleOwner, ::initAdapter)
+        viewModel.loading.observe(viewLifecycleOwner, ::setLoading)
+        viewModelPayment.loading.observe(viewLifecycleOwner, ::setLoading)
+
+        viewModel.error.observe(viewLifecycleOwner) {
+            showMessageDialog(it)
+        }
+        viewModel.createCardsPayment.observe(viewLifecycleOwner) {
+            it?.let {
+                navigateAnim(
+                    CardsManagementFragmentDirections.actionCardManageToNavCyberSource(
+                        it.toTypedArray()
+                    )
+                )
+                viewModel.emptyCreateCardsPayment()
+                viewModel.emptyCardsType()
+            }
+        }
+        viewModelPayment.createCardsPaymentInvoices.observe(viewLifecycleOwner) {
+            Log.d("listbbdd", "" + it)
+
+            it?.let {
+                navigateAnim(
+                    CardsManagementFragmentDirections.actionCardManageToNavCyberSource(it.toTypedArray())
+                )
+            }
+        }
+        viewModelCards.deleteCards.observe(viewLifecycleOwner) {
+            onRefresh("")
+        }
+        viewModelRecurring.addCardsResponse.observe(viewLifecycleOwner) {
+            it?.let {
+                val bottom = BottomSheet.show(
+                    childFragmentManager,
+                    getString(R.string.label_payment_switch),
+                    CyberSourceFragment(),
+                    this,
+                    arguments = Bundle().apply {
+                        putSerializable("keyValueList", it.toTypedArray())
+                    },
+                    theme = Theme.WHITE
+                ) {
+                    viewModelRecurring.emptyCreateCardsPayment()
+                    viewModel.getHisabiCards()
+                }
+
+
+            }
+            viewModelRecurring.emptyCreateCardsPayment()
+        }
+        viewModelRecurring.emptyCreateCardsPayment()
+        viewModel.error.observe(viewLifecycleOwner) {
+            showMessageDialog(it)
+        }
+        viewModelCards.error.observe(viewLifecycleOwner) {
+            showMessageDialog(it)
+        }
+    }
+
+    private fun setLoading(loading: Boolean?) {
+        loading?.let {
+            binding.loading.progress.visible(it)
+            binding.paymentTypes.visible(!it)
+        }
+    }
+
+    fun showMessage(message: String?, confirmationListener: ClickListener? = null) =
+        showMessageDialog(message, confirmationListener)
+
+    override fun deleteCards(id: String, name: String) {
+        Log.d("sdfrgfewfewff", "awdqefdefe")
+
+        val message = getString(
+            R.string.delete_message, name
+        )
+        childFragmentManager.showDialog(ProgramDetailsFragment.TAG,
+            DialogType.CONFIRMATION,
+            getString(R.string.confirmation),
+            message,
+            getString(R.string.confirm),
+            cancelButton = getString(R.string.cancel),
+            cancelable = false,
+            confirmationListener = ClickListener {
+                viewModelCards.hisabiInvalidateCard(DeleteCardModel(cardId = id))
+
+            })
+    }
+
+
+    fun setSelectedTypes(dataCards: (cardTypes: CardsType?) -> Unit) {
+        this.onChoice = dataCards
+    }
+
+    override fun onRefresh(routId: String) {
+        viewModel.getHisabiCards()
+    }
+
+    companion object {
+        fun navigateArgs(
+            cardsTypes: Array<CardsType>? = null,
+            paymentType: PaymentCards,
+            cardId: String? = null,
+        ): Bundle {
+            return Bundle().apply {
+                putParcelableArray("cardsType", cardsTypes)
+                putSerializable("paymentType", paymentType)
+                putString("cardId", cardId)
+            }
+        }
+    }
+
+
+}
+
+
