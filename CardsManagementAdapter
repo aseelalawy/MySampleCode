@@ -1,0 +1,128 @@
+/region Diff Callback
+val DIFF_CALLBACK = object :
+    DiffUtil.ItemCallback<CardsType>() {
+    override fun areItemsTheSame(oldAd: CardsType, newAd: CardsType) =
+        oldAd.type == newAd.type
+
+    override fun areContentsTheSame(oldAd: CardsType, newAd: CardsType) = oldAd == newAd
+}
+//endregion
+
+//region Adapter
+class CardsManagementAdapter(
+    private val callbackCards: CardsCallback,
+    callback: CardsTypeClick? = null,
+    showDelete: Boolean = false,
+
+    ) : BaseAdapter<CardsType, CardsTypeVH>(DIFF_CALLBACK) {
+
+    var selectedType: String? = null
+    var selectedCardType: CardsTypes? = null
+    var selectedCard: CardsType? = null
+    var showDelete = showDelete
+    private val clickCallback: CardsTypeClick = CardsTypeClick { item ->
+        this.selectedType = item.id
+        this.selectedCardType = item.type
+        this.selectedCard = item
+        callback?.onClick(item)
+        notifyDataSetChanged()
+    }
+
+    fun selectItemByCardNumber(cardNumber: String) {
+        val position = currentList.indexOfFirst { it.cardNumber == cardNumber }
+        if (position != -1) {
+            val selectedItem = currentList[position]
+            selectedType = selectedItem.id
+            selectedCardType = selectedItem.type
+            selectedCard = selectedItem
+            notifyItemChanged(position)
+        }
+    }
+    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int) =
+        CardsTypeVH.from(parent, callbackCards!!)
+
+    override fun onBindViewHolder(holder: CardsTypeVH, position: Int) {
+        holder.bind(getItem(position), clickCallback, selectedType, selectedCardType, showDelete)
+    }
+
+}
+//endregion
+
+//region ViewHolder
+class CardsTypeVH(
+    private val callbackCarda: CardsCallback,
+
+    binding: ItemPaymentManageCardBinding, val context: Context
+) :
+    BaseViewHolder<ItemPaymentManageCardBinding>(binding) {
+
+    fun bind(
+        item: CardsType,
+        callback: CardsTypeClick,
+        selectedPosition: String?,
+        selectedCardType: CardsTypes?,
+        showDelete: Boolean = false
+    ) {
+
+        selectedPosition?.let { item.checked = selectedPosition == item.id }
+
+        binding.item = item
+        binding.callback = callback
+        setTheme(item, currentTheme, defaultTheme)
+
+
+        if (item.cardType == "Visa") {
+            binding.image.setImageResource(R.drawable.visa_card)
+            selectedCardType == CardsTypes.Visa
+        } else {
+            binding.image.setImageResource(R.drawable.mastercard)
+            selectedCardType == CardsTypes.Mastercard
+
+
+        }
+        if (item.cardNumber == context.getString(R.string.use_anew_card)) {
+            binding.delete.visibility = View.GONE
+            selectedCardType == CardsTypes.Other
+
+            binding.image.visibility = View.GONE
+        }
+        binding.delete.setOnClickListener {
+
+            callbackCarda.deleteCards(item.id, item.cardNumber)
+        }
+        binding.cycleDate.text =
+            if (item.cardNumber != context.getString(R.string.use_anew_card)) item.cardNumber.takeLast(
+                9
+            )else item.cardNumber
+        if (showDelete)
+            binding.delete.visible(false)
+    }
+
+    fun setTheme(item: CardsType, current: ThemeInfo, default: ThemeInfo) {
+        ThemeUtil.setFocussedCardColor(
+            binding.card,
+            binding.container,
+            binding.check,
+            current,
+            default,
+            item.checked
+        )
+    }
+
+    companion object {
+
+        fun from(parent: ViewGroup, callback: CardsCallback): CardsTypeVH {
+            return CardsTypeVH(
+                callbackCarda = callback,
+                ItemPaymentManageCardBinding.inflate(
+                    LayoutInflater.from(parent.context),
+                    parent,
+                    false
+                ), parent.context
+            )
+        }
+
+    }
+
+
+}
